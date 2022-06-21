@@ -27,10 +27,14 @@ from soaplib.core.model.base import Null
 
 from soaplib.core.service import soap, DefinitionBase
 from soaplib.core.model.enum import Enum
+from dataclasses import dataclass, field
+
+
 
 '''
 
 INTERFACE = '''\
+@dataclass
 class {name}({bases}):
     """{docstring}"""
 '''
@@ -56,9 +60,7 @@ SOAPMETHOD = '''    @soap({args}_returns={response})'''
 METHOD = '''    def {name}(self{args}):'''
 
 METHOD_DOCSTRING = '''\
-        """Parameters:
-{args}
-
+        """
         Returns: {response}
         """\
 '''
@@ -79,27 +81,27 @@ SCHEMA_TYPE_MAPPING = {
 
     'None': 'Null',
 
-    'boolean': 'Boolean',
-    'string': 'String',
+    'boolean': 'bool',
+    'string': 'str',
 
-    'integer': 'Integer',
-    'long': 'Integer',
-    'int': 'Integer',
-    'short': 'Integer',
-    'byte': 'Integer',
+    'integer': 'int',
+    'long': 'int',
+    'int': 'int',
+    'short': 'int',
+    'byte': 'int',
 
-    'unsignedLong': 'Integer',
-    'unsignedInt': 'Integer',
-    'unsignedShort': 'Integer',
-    'unsignedByte': 'Integer',
+    'unsignedLong': 'int',
+    'unsignedInt': 'int',
+    'unsignedShort': 'int',
+    'unsignedByte': 'int',
 
-    'positiveInteger': 'Integer',
-    'nonPositiveInteger': 'Integer',
-    'negativeInteger': 'Integer',
-    'nonNegativeInteger': 'Integer',
+    'positiveInteger': 'int',
+    'nonPositiveInteger': 'int',
+    'negativeInteger': 'int',
+    'nonNegativeInteger': 'int',
 
-    'float': 'Float',
-    'double': 'Double',
+    'float': 'float',
+    'double': 'float',
 
     'decimal': 'Decimal',
 
@@ -107,13 +109,19 @@ SCHEMA_TYPE_MAPPING = {
     'date': 'Date',
 
     'anyURI': 'AnyUri',
-    'token': 'String',
-    'normalizedString': 'String',
+    'token': 'str',
+    'normalizedString': 'str',
 
-    'base64Binary': 'String',
-    'hexBinary': 'String',
+    'base64Binary': 'str',
+    'hexBinary': 'str',
 }
 
+DEFAULT_VALUE_MAPPING = {
+    'int': 0,
+    'float': 0,
+    'str': "''",
+    'bool': False
+}
 
 def format_docstring(text, indent=4, colwidth=78):
     width = colwidth - indent
@@ -124,6 +132,12 @@ def format_docstring(text, indent=4, colwidth=78):
 def type_name(type_):
     resolved = type_.resolve()
     return resolved.name or ''
+
+def to_snake_case(name):
+    name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    name = re.sub('__([A-Z])', r'_\1', name)
+    name = re.sub('([a-z0-9])([A-Z])', r'\1_\2', name)
+    return name.lower()
 
 
 def schema_type_name(type_, deps=None):
@@ -211,7 +225,7 @@ def get_printed_types(service_def_types, standard_type_namespaces):
                 find(resolved)
 
             if not interface_bases:
-                interface_bases = ['ClassModel']
+                interface_bases = ['']
 
             raw_type_name = type_name(type_)
 
@@ -242,7 +256,7 @@ def get_printed_types(service_def_types, standard_type_namespaces):
                         attr_type_name = type_name(attr[0])
                         type_attributes[raw_type_name][name] = attr_type_name
                         schema_type = schema_type_name(attr[0], deps=type_deps.setdefault(raw_type_name, []))
-                        out.append('    {0} = {1}\n'.format(normalize_identifier(name), schema_type))
+                        out.append('    {0}: {1} = {2}\n'.format(normalize_identifier(name), schema_type, DEFAULT_VALUE_MAPPING.get(str(schema_type), 0)))
                 else:
                     out.append('    pass\n')
 
@@ -355,7 +369,7 @@ def get_service_interface(methods, type_map):
         method_arg_specs = []
 
         for method_arg_name, arg_detail, more_details in arg_list:
-            method_arg_names.append(method_arg_name)
+            method_arg_names.append(to_snake_case(method_arg_name))
 
             # for docstring
 
@@ -389,15 +403,18 @@ def get_service_interface(methods, type_map):
         if method_return_type not in type_map and method_return_type in SCHEMA_TYPE_MAPPING:
             method_return_type = SCHEMA_TYPE_MAPPING[method_return_type]
 
-        out.append(SOAPMETHOD.format(
-            args=''.join(arg + ', ' for arg in method_arg_specs),
-            response=method_return_type,
-        ))
+        # out.append(SOAPMETHOD.format(
+        #     args=''.join(arg + ', ' for arg in method_arg_specs),
+        #     response=method_return_type,
+        # ))
+        #
+        # out.append(METHOD.format(
+        #     name=normalize_identifier(method_name),
+        #     args=''.join(', ' + arg for arg in method_arg_names),
+        # ))
+        args_str = f''.join(f'{arg_name}: {arg_type}, ' for arg_name, arg_type in zip(method_arg_names, method_arg_specs)).rstrip(', ')
 
-        out.append(METHOD.format(
-            name=normalize_identifier(method_name),
-            args=''.join(', ' + arg for arg in method_arg_names),
-        ))
+        out.append(f'def {normalize_identifier(method_name)}(self, {args_str}):')
 
         out.append(METHOD_DOCSTRING.format(
             args=''.join('\n        ' + arg_det for arg_det in method_arg_details),
@@ -461,3 +478,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
