@@ -1,15 +1,15 @@
 #! /usr/bin/env python
 
+import keyword
 import os.path
+import re
 import sys
 import textwrap
-import keyword
-import re
 
 import suds.client
 
-VALID_IDENTIFIER_RE                   = re.compile(r"[_A-Za-z][_A-Za-z1-9]*")
-VALID_IDENTIFIER_FIRST_LETTER_RE      = re.compile(r"[_A-Za-z]")
+VALID_IDENTIFIER_RE = re.compile(r"[_A-Za-z][_A-Za-z1-9]*")
+VALID_IDENTIFIER_FIRST_LETTER_RE = re.compile(r"[_A-Za-z]")
 VALID_IDENTIFIER_SUBSEQUENT_LETTER_RE = re.compile(r"[_A-Za-z1-9]")
 
 HEADER = '''\
@@ -75,43 +75,43 @@ STANDARD_TYPE_NAMESPACES = (
 )
 
 SCHEMA_TYPE_MAPPING = {
-    None:                   '{type_name}',
+    None: '{type_name}',
 
-    'None':                 'Null',
+    'None': 'Null',
 
-    'boolean':              'Boolean',
-    'string':               'String',
+    'boolean': 'Boolean',
+    'string': 'String',
 
-    'integer':              'Integer',
-    'long':                 'Integer',
-    'int':                  'Integer',
-    'short':                'Integer',
-    'byte':                 'Integer',
+    'integer': 'Integer',
+    'long': 'Integer',
+    'int': 'Integer',
+    'short': 'Integer',
+    'byte': 'Integer',
 
-    'unsignedLong':         'Integer',
-    'unsignedInt':          'Integer',
-    'unsignedShort':        'Integer',
-    'unsignedByte':         'Integer',
+    'unsignedLong': 'Integer',
+    'unsignedInt': 'Integer',
+    'unsignedShort': 'Integer',
+    'unsignedByte': 'Integer',
 
-    'positiveInteger':      'Integer',
-    'nonPositiveInteger':   'Integer',
-    'negativeInteger':      'Integer',
-    'nonNegativeInteger':   'Integer',
+    'positiveInteger': 'Integer',
+    'nonPositiveInteger': 'Integer',
+    'negativeInteger': 'Integer',
+    'nonNegativeInteger': 'Integer',
 
-    'float':                'Float',
-    'double':               'Double',
+    'float': 'Float',
+    'double': 'Double',
 
-    'decimal':              'Decimal',
+    'decimal': 'Decimal',
 
-    'dateTime':             'DateTime',
-    'date':                 'Date',
+    'dateTime': 'DateTime',
+    'date': 'Date',
 
-    'anyURI':               'AnyUri',
-    'token':                'String',
-    'normalizedString':     'String',
+    'anyURI': 'AnyUri',
+    'token': 'String',
+    'normalizedString': 'String',
 
-    'base64Binary':         'String',
-    'hexBinary':            'String',
+    'base64Binary': 'String',
+    'hexBinary': 'String',
 }
 
 
@@ -127,7 +127,6 @@ def type_name(type_):
 
 
 def schema_type_name(type_, deps=None):
-
     resolved = type_.resolve()
     name = resolved.name or ''
 
@@ -139,13 +138,13 @@ def schema_type_name(type_, deps=None):
 
         # possibly save dependency link
         if deps is not None:
-            deps.append(unicode(name))
+            deps.append(name)
 
     required = type_.required()
     schema_type = schema_type.format(type_name=name, required=required)
 
-    if type_.unbounded():
-        schema_type = 'Array({0})'.format(schema_type)
+    # if type_.unbounded():
+    #     schema_type = 'Array({0})'.format(schema_type)
 
     return schema_type
 
@@ -208,6 +207,7 @@ def get_printed_types(service_def_types, standard_type_namespaces):
                             find(c)
                         if c.ref is not None:
                             interface_bases.append(c.ref[0])
+
                 find(resolved)
 
             if not interface_bases:
@@ -227,21 +227,21 @@ def get_printed_types(service_def_types, standard_type_namespaces):
 
             else:
                 out.append(INTERFACE.format(
-                        name=normalize_identifier(type_interface_name),
-                        bases=', '.join(interface_bases),
-                        docstring=format_docstring(TYPE_INTERFACE_DOCSTRING.format(
-                                type=type_description,
-                                name=raw_type_name,
-                                namespace=namespace_url,
-                            )
-                        )
-                    ))
+                    name=normalize_identifier(type_interface_name),
+                    bases=', '.join(interface_bases),
+                    docstring=format_docstring(TYPE_INTERFACE_DOCSTRING.format(
+                        type=type_description,
+                        name=raw_type_name,
+                        namespace=namespace_url,
+                    )
+                    )
+                ))
                 if type_.children():
                     for attr in type_.children():
                         name = attr[0].name.replace(' ', '_')
                         attr_type_name = type_name(attr[0])
                         type_attributes[raw_type_name][name] = attr_type_name
-                        schema_type = schema_type_name(attr[0], deps=type_deps.setdefault(unicode(raw_type_name), []))
+                        schema_type = schema_type_name(attr[0], deps=type_deps.setdefault(raw_type_name, []))
                         out.append('    {0} = {1}\n'.format(normalize_identifier(name), schema_type))
                 else:
                     out.append('    pass\n')
@@ -265,7 +265,7 @@ def get_methods(service_def, type_attributes, remove_input_output_messages, type
                 # XXX: This is discards the namespace part
                 if method_def.soap.output.body.wrapped:
 
-                    input_message  = method_def.soap.input.body.parts[0].element[0]
+                    input_message = method_def.soap.input.body.parts[0].element[0]
                     output_message = method_def.soap.output.body.parts[0].element[0]
 
                     if output_message in type_attributes:
@@ -300,7 +300,7 @@ def sort_deps(printed, type_deps):
 
     printed = list(reversed(printed))
 
-    queue = [item for item in printed if len(type_deps.get(unicode(item[0]), [])) == 0]
+    queue = [item for item in printed if len(type_deps.get(item[0], [])) == 0]
     satisfied = set(queue)
     remaining = [item for item in printed if item not in queue]
 
@@ -308,14 +308,14 @@ def sort_deps(printed, type_deps):
 
     while queue:
         item = queue.pop()
-        item_type_name = unicode(item[0])
+        item_type_name = item[0]
 
         sorted_printed.append(item)
         satisfied.add(item_type_name)
 
         for item in remaining:
 
-            remaining_item_type_name = unicode(item[0])
+            remaining_item_type_name = item[0]
 
             deps_list = type_deps.get(remaining_item_type_name, [])
             remaining_deps = []
@@ -335,26 +335,26 @@ def sort_deps(printed, type_deps):
 def get_service_interface_header(service_def):
     # Main service interface
     return INTERFACE.format(
-            name=normalize_identifier(service_def.service.name),
-            bases=u"DefinitionBase",
-            docstring=format_docstring(SERVICE_INTERFACE_DOCSTRING.format(
-                    service_name=service_def.service.name,
-                    tns=service_def.wsdl.tns[1],
-                )
-            )
+        name=normalize_identifier(service_def.service.name),
+        bases=u"DefinitionBase",
+        docstring=format_docstring(SERVICE_INTERFACE_DOCSTRING.format(
+            service_name=service_def.service.name,
+            tns=service_def.wsdl.tns[1],
         )
+        )
+    )
 
 
 def get_service_interface(methods, type_map):
     out = []
 
-    for method_name, (method_return_type, arg_list) in sorted(methods.iteritems()):
+    for method_name, (method_return_type, arg_list) in sorted(methods.items()):
 
         method_arg_names = []
         method_arg_details = []
         method_arg_specs = []
 
-        for method_arg_name, arg_detail in arg_list:
+        for method_arg_name, arg_detail, more_details in arg_list:
             method_arg_names.append(method_arg_name)
 
             # for docstring
@@ -373,10 +373,10 @@ def get_service_interface(methods, type_map):
             arg_type_name = type_name(arg_detail)
 
             method_spec = '``{0}`` -- {1}{2}'.format(
-                    arg_detail.name,
-                    arg_type_name,
-                    method_modifiers
-                )
+                arg_detail.name,
+                arg_type_name,
+                method_modifiers
+            )
 
             method_arg_details.append(method_spec)
 
@@ -390,19 +390,19 @@ def get_service_interface(methods, type_map):
             method_return_type = SCHEMA_TYPE_MAPPING[method_return_type]
 
         out.append(SOAPMETHOD.format(
-                args=''.join(arg + ', ' for arg in method_arg_specs),
-                response=method_return_type,
-            ))
+            args=''.join(arg + ', ' for arg in method_arg_specs),
+            response=method_return_type,
+        ))
 
         out.append(METHOD.format(
-                name=normalize_identifier(method_name),
-                args=''.join(', ' + arg for arg in method_arg_names),
-            ))
+            name=normalize_identifier(method_name),
+            args=''.join(', ' + arg for arg in method_arg_names),
+        ))
 
         out.append(METHOD_DOCSTRING.format(
-                args=''.join('\n        ' + arg_det for arg_det in method_arg_details),
-                response=method_return_type,
-            ))
+            args=''.join('\n        ' + arg_det for arg_det in method_arg_details),
+            response=method_return_type,
+        ))
 
         out.append(DEFAULT_RETURN)
 
@@ -411,8 +411,8 @@ def get_service_interface(methods, type_map):
 
 def get_type_map(type_seq, type_map):
     return TYPE_MAP.format(
-            items=',\n'.join(["    '{0}': {1}".format(*k) for k in type_seq if k[0] in type_map])
-        )
+        items=',\n'.join(["    '{0}': {1}".format(*k) for k in type_seq if k[0] in type_map])
+    )
 
 
 def generate(client, url=None, standard_type_namespaces=STANDARD_TYPE_NAMESPACES, remove_input_output_messages=True):
@@ -427,12 +427,14 @@ def generate(client, url=None, standard_type_namespaces=STANDARD_TYPE_NAMESPACES
         # service_def.types is a list of tuples where the first element is
         # always equal to the second afaik
         service_def_types = (t[0] for t in service_def.types)
-        type_map, type_seq, type_attributes, types_printed, type_names = get_printed_types(service_def_types, standard_type_namespaces)
+        type_map, type_seq, type_attributes, types_printed, type_names = get_printed_types(service_def_types,
+                                                                                           standard_type_namespaces)
         printed.extend(types_printed)
 
         printed.append(get_service_interface_header(service_def))
 
-        methods = get_methods(service_def, type_attributes, remove_input_output_messages, type_names, type_map)  # name -> (response type, list of parameters,)
+        methods = get_methods(service_def, type_attributes, remove_input_output_messages, type_names,
+                              type_map)  # name -> (response type, list of parameters,)
         printed.append(get_service_interface(methods, type_map))
 
         type_map_out = get_type_map(type_seq, type_map)
@@ -443,8 +445,8 @@ def generate(client, url=None, standard_type_namespaces=STANDARD_TYPE_NAMESPACES
 
 def main():
     if len(sys.argv) < 2:
-        print 'Usage: {0} <url>'.format(sys.argv[0])
-        print 'The output will be printed to the console'
+        print('Usage: {0} <url>'.format(sys.argv[0]))
+        print('The output will be printed to the console')
         return
 
     if not '://' in sys.argv[1]:
@@ -454,7 +456,8 @@ def main():
         client = suds.client.Client(sys.argv[1], username=sys.argv[2], password=sys.argv[3])
     else:
         client = suds.client.Client(sys.argv[1])
-    print generate(client, sys.argv[1])
+    print(generate(client, sys.argv[1]))
+
 
 if __name__ == '__main__':
     main()
