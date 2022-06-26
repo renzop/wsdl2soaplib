@@ -1,3 +1,5 @@
 .idea
 *.pyc
 .direnv
+*.wsdl
+*_soap_interface_automatic.py

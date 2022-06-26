@@ -15,27 +15,16 @@ VALID_IDENTIFIER_SUBSEQUENT_LETTER_RE = re.compile(r"[_A-Za-z1-9]")
 HEADER = '''\
 """SOAP web services generated from:
 {wsdl}.
+with: https://github.com/renzop/wsdl2soaplib
 """
-
-from soaplib.core.model.primitive import (
-        Any, AnyAsDict, AnyUri, Boolean, Date, DateTime,
-        Decimal, Double, Duration, Integer, Float, Mandatory, String
-)
-from soaplib.core.model.clazz import Array, ClassModel
-
-from soaplib.core.model.base import Null
-
-from soaplib.core.service import soap, DefinitionBase
-from soaplib.core.model.enum import Enum
-from dataclasses import dataclass, field
-
-
+from dataclasses import dataclass
+from enum import Enum, auto
 
 '''
 
 INTERFACE = '''\
 @dataclass
-class {name}({bases}):
+class {name}:
     """{docstring}"""
 '''
 
@@ -66,7 +55,7 @@ METHOD_DOCSTRING = '''\
 '''
 
 DEFAULT_RETURN = '''\
-        return None
+        return self.client.{method}({args})
 
 '''
 
@@ -236,8 +225,12 @@ def get_printed_types(service_def_types, standard_type_namespaces):
             type_attributes[raw_type_name] = {}
 
             if resolved.enum():
-                enum_args = ', '.join("'{0}'".format(attr[0].name.replace(' ', '_')) for attr in type_.children())
-                out.append('{0} = Enum({1}, type_name="{0}")\n'.format(type_interface_name, enum_args))
+                enum_args = [attr[0].name.replace(' ', '_') for attr in type_.children()]
+                #out.append('{0} = Enum("{0}", "{1}")\n'.format(type_interface_name, enum_args))
+                out.append('class {0}(Enum):\n'.format(type_interface_name))
+                for prop in enum_args:
+                    out.append('    {0} = auto()\n'.format(prop))
+
 
             else:
                 out.append(INTERFACE.format(
@@ -256,7 +249,7 @@ def get_printed_types(service_def_types, standard_type_namespaces):
                         attr_type_name = type_name(attr[0])
                         type_attributes[raw_type_name][name] = attr_type_name
                         schema_type = schema_type_name(attr[0], deps=type_deps.setdefault(raw_type_name, []))
-                        out.append('    {0}: {1} = {2}\n'.format(normalize_identifier(name), schema_type, DEFAULT_VALUE_MAPPING.get(str(schema_type), 0)))
+                        out.append('    {0}: {1} = {2}\n'.format(normalize_identifier(name), schema_type, DEFAULT_VALUE_MAPPING.get(str(schema_type), f'{schema_type}()')))
                 else:
                     out.append('    pass\n')
 
@@ -350,7 +343,7 @@ def get_service_interface_header(service_def):
     # Main service interface
     return INTERFACE.format(
         name=normalize_identifier(service_def.service.name),
-        bases=u"DefinitionBase",
+        bases=u"",
         docstring=format_docstring(SERVICE_INTERFACE_DOCSTRING.format(
             service_name=service_def.service.name,
             tns=service_def.wsdl.tns[1],
@@ -403,25 +396,16 @@ def get_service_interface(methods, type_map):
         if method_return_type not in type_map and method_return_type in SCHEMA_TYPE_MAPPING:
             method_return_type = SCHEMA_TYPE_MAPPING[method_return_type]
 
-        # out.append(SOAPMETHOD.format(
-        #     args=''.join(arg + ', ' for arg in method_arg_specs),
-        #     response=method_return_type,
-        # ))
-        #
-        # out.append(METHOD.format(
-        #     name=normalize_identifier(method_name),
-        #     args=''.join(', ' + arg for arg in method_arg_names),
-        # ))
         args_str = f''.join(f'{arg_name}: {arg_type}, ' for arg_name, arg_type in zip(method_arg_names, method_arg_specs)).rstrip(', ')
 
-        out.append(f'def {normalize_identifier(method_name)}(self, {args_str}):')
+        out.append(f'    def {normalize_identifier(method_name)}(self, {args_str}):')
 
         out.append(METHOD_DOCSTRING.format(
             args=''.join('\n        ' + arg_det for arg_det in method_arg_details),
             response=method_return_type,
         ))
 
-        out.append(DEFAULT_RETURN)
+        out.append(DEFAULT_RETURN.format(args=f''.join(f'{arg_name}, ' for arg_name in method_arg_names).rstrip(', '), method=method_name))
 
     return ''.join(s + '\n' for s in out)
 
